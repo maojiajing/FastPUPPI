@@ -99,17 +99,13 @@ from RecoJets.Configuration.GenJetParticles_cff import genParticlesForJetsNoNu
 process.genParticlesForJetsNoNu2 = genParticlesForJetsNoNu.clone(src = "genParticles")
 process.ak8GenJetsNoNu2 = ak8GenJetsNoNu.clone(src="genParticlesForJetsNoNu2")
 
-process.ntuple = cms.EDAnalyzer("ResponseNTuplizer",
-    genJets = cms.InputTag("ak8GenJetsNoNu2"),
-    genParticles = cms.InputTag("genParticles"),
-    isParticleGun = cms.bool(False),
-    doRandom = cms.bool(False),
-    objects = cms.PSet(),
-    copyUInts = cms.VInputTag()
+process.GenJet = cms.EDProducer("GenJetProducer",
+    GenJetTag = cms.InputTag("ak8GenJetsNoNu2"),
+    GenParTag = cms.InputTag("genParticles"),
 )
 
 process.p = cms.Path(process.pp + process.jets + process.ppp+
-                     process.genParticlesForJetsNoNu2 + process.ak8GenJetsNoNu2+process.ntuple)
+                     process.genParticlesForJetsNoNu2 + process.ak8GenJetsNoNu2+process.GenJet)
 
 
 # process.out = cms.OutputModule("PoolOutputModule", fileName = cms.untracked.string('myOutputFile.root'))
