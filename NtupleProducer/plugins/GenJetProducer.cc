@@ -66,16 +66,18 @@ class GenJetProducer : public edm::stream::EDProducer<> {
       TTree *tree_;
       edm::EDGetTokenT<reco::GenJetCollection>      GenJetTok_;
       edm::EDGetTokenT<reco::GenParticleCollection> GenParTok_;
-      std::vector<float> *genjetPt;
-      std::vector<float> *genjetEta;
-      std::vector<float> *genjetPhi;
-      std::vector<float> *genjetMass;
-
-      std::vector<float> *genparPt;
-      std::vector<float> *genparEta;
-      std::vector<float> *genparPhi;
-      std::vector<float> *genparMass;
-      std::vector<int> *genparID;
+    static const Int_t Max = 1500;
+    Int_t njets;
+    Int_t npars;
+    Float_t genjetPt[Max];
+    Float_t genjetEta[Max];
+    Float_t genjetPhi[Max];
+    Float_t genjetMass[Max];
+    Float_t genparPt[Max];
+    Float_t genparEta[Max];
+    Float_t genparPhi[Max];
+    Float_t genparMass[Max];
+    Int_t genparID[Max];
 };
 
 
@@ -96,17 +98,6 @@ GenJetProducer::GenJetProducer(const edm::ParameterSet& iConfig):
   GenParTok_( consumes<reco::GenParticleCollection> (iConfig.getParameter<edm::InputTag>("GenParTag")) )
 {
 
-  genjetPt   = new std::vector<float>();
-  genjetEta  = new std::vector<float>();
-  genjetPhi  = new std::vector<float>();
-  genjetMass = new std::vector<float>();
-
-
-  genparPt   = new std::vector<float>();
-  genparEta  = new std::vector<float>();
-  genparPhi  = new std::vector<float>();
-  genparMass  = new std::vector<float>();
-  genparID  = new std::vector<int>();
 
    //register your products
 /* Examples
@@ -122,15 +113,18 @@ GenJetProducer::GenJetProducer(const edm::ParameterSet& iConfig):
   
   edm::Service<TFileService> fs;
   tree_ = fs->make<TTree>("tree","tree");
-  tree_->Branch("GenJet_pt", "vector<float>", genjetPt);
-  tree_->Branch("GenJet_eta", "vector<float>", genjetEta);
-  tree_->Branch("GenJet_phi", "vector<float>", genjetPhi);
-  tree_->Branch("GenJet_mass", "vector<float>", genjetMass);
-  tree_->Branch("GenPar_pt", "vector<float>", genparPt);
-  tree_->Branch("GenPar_eta", "vector<float>", genparEta);
-  tree_->Branch("GenPar_phi", "vector<float>", genparPhi);
-  tree_->Branch("GenPar_mass", "vector<float>", genparMass);
-  tree_->Branch("GenPar_ID", "vector<int>", genparID);
+  tree_->Branch("njets",&njets,"njets/I");
+  tree_->Branch("GenJet_pt",genjetPt,"genjetPt[njets]/F");
+  tree_->Branch("GenJet_eta",genjetEta,"genjetEta[njets]/F");
+  tree_->Branch("GenJet_phi",genjetPhi,"genjetPhi[njets]/F");
+  tree_->Branch("GenJet_mass",genjetMass,"genjetMass[njets]/F");
+
+  tree_->Branch("npars",&npars,"npars/I");
+  tree_->Branch("GenPar_pt",genparPt,"genparPt[npars]/F");
+  tree_->Branch("GenPar_eta",genparEta,"genparEta[npars]/F");
+  tree_->Branch("GenPar_phi",genparPhi,"genparPhi[npars]/F");
+  tree_->Branch("GenPar_mass",genparMass,"genparMass[npars]/F");
+  tree_->Branch("GenPar_ID",genparID,"genparID[npars]/I");
 }
 
 
@@ -169,18 +163,14 @@ GenJetProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
 bool GenJetProducer::ProdGenJet(edm::Handle<reco::GenJetCollection>  GenJetHdl)
 {
 
-  genjetPt->clear();
-  genjetEta->clear();
-  genjetPhi->clear();
-  genjetMass->clear();
-
+  njets = GenJetHdl->size();
   for(unsigned int i=0; i < GenJetHdl->size(); ++i)
   {
     reco::GenJet j = GenJetHdl->at(i);
-    genjetPt->push_back(j.pt());
-    genjetEta->push_back(j.eta());
-    genjetPhi->push_back(j.phi());
-    genjetMass->push_back(j.mass());
+    genjetPt[i]  = j.pt();
+    genjetEta[i]  = j.eta();
+    genjetPhi[i]  = j.phi();
+    genjetMass[i]  = j.mass();
   }
   return true;
 }       // -----  end of function GenJetProducer::ProdGenJet  -----
@@ -192,24 +182,19 @@ bool GenJetProducer::ProdGenJet(edm::Handle<reco::GenJetCollection>  GenJetHdl)
 // ===========================================================================
 bool GenJetProducer::ProdGenPar(edm::Handle<reco::GenParticleCollection> GenParHdl)
 {
-  genparPt->clear();
-  genparEta->clear();
-  genparPhi->clear();
-  genparMass->clear();
-  genparID->clear();
-
+  int i = 0;
   for (const reco::GenParticle &g : *GenParHdl) {
     if (g.isHardProcess() ||g.fromHardProcessFinalState())
     {
-      genparPt->push_back(g.pt());
-      genparEta->push_back(g.eta());
-      genparPhi->push_back(g.phi());
-      genparMass->push_back(g.mass());
-      genparID->push_back(g.pdgId());
+      genparPt[i] = g.pt();
+      genparEta[i] = g.eta();
+      genparPhi[i] = g.phi();
+      genparMass[i] = g.mass();
+      genparID[i] = g.pdgId();
+      i++;
     }
   }
-
-    std::cout <<  "End of eventi"<< std::endl;
+  npars = i;
 
   return true;
 }       // -----  end of function GenJetProducer::ProdGenPar  -----

@@ -17,11 +17,12 @@ cd ${CMSSW}
 eval `scramv1 runtime -csh` # cmsenv is an alias not on the workers
 echo "CMSSW: "$CMSSW_BASE
 
-tar -xzf ${_CONDOR_SCRATCH_DIR}/CMSSW.tgz
+xrdcp "root://cmseos.fnal.gov/${OUTPUT}/CMSSW.tgz" .
+tar -xzf CMSSW.tgz
 scram b 
 
 if ($? == 0) then
-  rm ${_CONDOR_SCRATCH_DIR}/CMSSW.tgz
+  rm CMSSW.tgz
 endif
 
 cd ${_CONDOR_SCRATCH_DIR}

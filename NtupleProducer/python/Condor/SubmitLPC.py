@@ -10,20 +10,22 @@ import tarfile
 import shutil
 import getpass
 
+# DelExe    = '../ParticleProducer_cfg.py'
 DelExe    = '../FatJetProducer_cfg.py'
 OutDir = '/store/user/%s/Phase2L1/FatJet' %  getpass.getuser()
 # tempdir = '/uscmst1b_scratch/lpc1/lpctrig/benwu/CondorTemp/' % getpass.getuser()
 # tempdir = '/uscmst1b_scratch/lpc1/lpctrig/benwu/CondorTemp/' % getpass.getuser()
 tempdir = '/uscmst1b_scratch/lpc1/3DayLifetime/benwu/TestCondor/'
-ProjectName = 'prod_v0'
+ProjectName = 'SeedJet_v4'
+# ProjectName = 'Par_v1'
 argument = "inputFiles=%s.$(Process).list outputFile=%s_$(Process)"
 # argument = "inputFiles=%s.$(Process).list outputFile=%s_$(Process) maxEvents=10 \n Queue %d \n"
 
 Process = {
-    'QCD_PU0'     : ['../QCD_PU0.list',     3],
-    'QCD_PU140'   : ['../QCD_PU140.list',   3],
-    'TTbar_PU0'   : ['../TTbar_PU0.list',   3],
-    'TTbar_PU140' : ['../TTbar_PU140.list', 3],
+    # 'QCD_PU0'     : ['../QCD_PU0.list',     3],
+    'QCD_PU140'   : ['../QCD_PU140.list',   50],
+   # 'TTbar_PU0'   : ['../TTbar_PU0.list',   3],
+    # 'TTbar_PU140' : ['../TTbar_PU140.list', 3],
 }
 
 def Condor_Sub(condor_file):
@@ -124,7 +126,9 @@ def my_process():
         [tar.add(f) for f in TarCMSSW()]
         tar.close()
     os.chdir(curdir)
-    tarballnames = [tarballname]
+    process = subprocess.Popen( "xrdcp %s root://cmseos.fnal.gov/%s " % (tarballname, outdir ),
+                               shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    tarballnames = []
 
     Tarfiles.append(os.path.abspath(DelExe))
     # Tarfiles += GetNeededFileList(key)

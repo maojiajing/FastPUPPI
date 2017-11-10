@@ -39,14 +39,15 @@ process.CaloInfoOut.outputName = ""; # turn off Ntuples
 process.InfoOut.outputName = ""; # turn off Ntuples
 process.pp = cms.Sequence(process.l1tPFHGCalProducerFrom3DTPsEM + process.CaloInfoOut + process.InfoOut)
 
-# InputSrc = [ 'InfoOut:Puppi']
-InputSrc = [ 'InfoOut:RawCalo', 'InfoOut:Calo', 'InfoOut:TK', 'InfoOut:TKVtx', 'InfoOut:PF', 'InfoOut:Puppi' ]
+InputSrc = [ 'InfoOut:PF']
+# InputSrc = [ 'InfoOut:RawCalo', 'InfoOut:Calo', 'InfoOut:TK', 'InfoOut:TKVtx', 'InfoOut:PF', 'InfoOut:Puppi' ]
 
 #============================================================================#
 #-------------------------------     Jets     -------------------------------#
 #============================================================================#
 from RecoJets.Configuration.RecoPFJets_cff import ak8PFJetsCHSSoftDrop
 from RecoJets.JetProducers.ak4PFJets_cfi import ak4PFJets
+from RecoJets.JetProducers.sc5PFJets_cfi import sisCone5PFJets
 from RecoJets.JetProducers.nJettinessAdder_cfi import Njettiness
 
 def AddJetCollection(cone, inputs):
@@ -55,6 +56,9 @@ def AddJetCollection(cone, inputs):
     attrname = "ak%d%s"  % ( cone *10, inputs.split(":")[-1])
     names.append(attrname)
     setattr(process, attrname,   ak4PFJets.clone(rParam       = cms.double(cone),  src = inputs) )
+    attrname = "sc%d%s"  % ( cone *10, inputs.split(":")[-1])
+    names.append(attrname)
+    setattr(process, attrname,   sisCone5PFJets.clone(rParam       = cms.double(cone),  src = inputs) )
     # ## SoftDrop
     # attrname = "ak%d%sSD"  % ( cone *10, inputs.split(":")[-1])
     # names.append(attrname)
@@ -63,12 +67,17 @@ def AddJetCollection(cone, inputs):
     attrname = "ak%d%sNJ"  % ( cone *10, inputs.split(":")[-1])
     names.append(attrname)
     setattr(process, attrname,   Njettiness.clone(src = "ak%d%s"  % ( cone *10, inputs.split(":")[-1])))
+    attrname = "sc%d%sNJ"  % ( cone *10, inputs.split(":")[-1])
+    names.append(attrname)
+    setattr(process, attrname,   Njettiness.clone(src = "sc%d%s"  % ( cone *10, inputs.split(":")[-1])))
+
     return names
 
 
 attrnames = []
 for j in InputSrc:
     attrnames += AddJetCollection(0.8, j )
+    attrnames += AddJetCollection(0.4, j )
 
 strf = "+".join(["process.%s" % attrname for attrname in attrnames])
 process.jets =cms.Sequence(eval(strf))
@@ -91,8 +100,31 @@ for j in attrnames:
     pp.append(getattr(process, attrname, None))
     pp.append(getattr(process, attrname, None))
     strf += "process.%s + " % attrname
-process.ppp =cms.Sequence(eval(strf[:-3]))
 
+for j in InputSrc:
+    attrname = "Seed3_" + j.split(":")[-1]
+    setattr(process, attrname,   cms.EDProducer('SeedJetProducer',
+                                                ParTag = cms.InputTag(j),
+                                                seedPtCut    = cms.double(3.0),
+                                                cone    = cms.double(0.4),
+                                                seedID    = cms.uint32(999),
+                                                ))
+    strf += "process.%s + " % attrname
+    attrname = "Seed2_" + j.split(":")[-1]
+    setattr(process, attrname,   cms.EDProducer('SeedJetProducer',
+                                                ParTag = cms.InputTag(j),
+                                                seedPtCut    = cms.double(2.0),
+                                                cone    = cms.double(0.4),
+                                                seedID    = cms.uint32(999),
+                                                ))
+    strf += "process.%s + " % attrname
+
+    attrname = "Par_" + j.split(":")[-1]
+    setattr(process, attrname,   cms.EDProducer('ParProducer',
+                                                ParTag = cms.InputTag(j),
+                                                ))
+    strf += "process.%s + " % attrname
+process.ppp =cms.Sequence(eval(strf[:-3]))
 
 from RecoJets.Configuration.RecoGenJets_cff import ak8GenJetsNoNu
 from RecoJets.Configuration.GenJetParticles_cff import genParticlesForJetsNoNu
