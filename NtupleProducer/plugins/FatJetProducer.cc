@@ -66,15 +66,16 @@ class FatJet : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
     edm::EDGetTokenT<edm::ValueMap<float> >   Tau2Tok_;
     edm::EDGetTokenT<edm::ValueMap<float> >   Tau3Tok_;
     edm::EDGetTokenT<edm::ValueMap<float> >   Tau4Tok_;
-    float pt;
-    std::vector<float> *fatjetPt;
-    std::vector<float> *fatjetEta;
-    std::vector<float> *fatjetPhi;
-    std::vector<float> *fatjetMass;
-    std::vector<float> *tau1;
-    std::vector<float> *tau2;
-    std::vector<float> *tau3;
-    std::vector<float> *tau4;
+    static const Int_t Max = 1500;
+    Int_t npar;
+    Float_t pt[Max];
+    Float_t eta[Max];
+    Float_t phi[Max];
+    Float_t mass[Max];
+    Float_t tau1[Max];
+    Float_t tau2[Max];
+    Float_t tau3[Max];
+    Float_t tau4[Max];
 };
 
 //
@@ -95,27 +96,18 @@ FatJet::FatJet(const edm::ParameterSet& iConfig):
   Tau3Tok_( consumes<edm::ValueMap<float> > (iConfig.getParameter<edm::InputTag>("Tau3Tag")) ),
   Tau4Tok_( consumes<edm::ValueMap<float> > (iConfig.getParameter<edm::InputTag>("Tau4Tag")) )
 {
-  fatjetPt   = new std::vector<float>();
-  fatjetEta  = new std::vector<float>();
-  fatjetPhi  = new std::vector<float>();
-  fatjetMass = new std::vector<float>();
-  tau1 = new std::vector<float>();
-  tau2 = new std::vector<float>();
-  tau3 = new std::vector<float>();
-  tau4 = new std::vector<float>();
-
-
   edm::Service<TFileService> fs;
   tree_ = fs->make<TTree>("tree","tree");
-  tree_->Branch("mc_pt", &pt, "mc_pt/F");
-  tree_->Branch("FatJet_pt", "vector<float>", fatjetPt);
-  tree_->Branch("FatJet_eta", "vector<float>", fatjetEta);
-  tree_->Branch("FatJet_phi", "vector<float>", fatjetPhi);
-  tree_->Branch("FatJet_mass", "vector<float>", fatjetMass);
-  tree_->Branch("Tau1", "vector<float>", tau1);
-  tree_->Branch("Tau2", "vector<float>", tau2);
-  tree_->Branch("Tau3", "vector<float>", tau3);
-  tree_->Branch("Tau4", "vector<float>", tau4);
+
+  tree_->Branch("npar",&npar,"npar/I");
+  tree_->Branch("pt",pt,"pt[npar]/F");
+  tree_->Branch("eta",eta,"eta[npar]/F");
+  tree_->Branch("phi",phi,"phi[npar]/F");
+  tree_->Branch("mass",mass,"mass[npar]/F");
+  tree_->Branch("Tau1",tau1,"Tau1[npar]/F");
+  tree_->Branch("Tau2",tau2,"Tau2[npar]/F");
+  tree_->Branch("Tau3",tau3,"Tau3[npar]/F");
+  tree_->Branch("Tau4",tau4,"Tau4[npar]/F");
 }
 
 
@@ -149,27 +141,21 @@ FatJet::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   iEvent.getByToken(Tau3Tok_, Tau3Hdl); 
   iEvent.getByToken(Tau4Tok_, Tau4Hdl); 
 
-  fatjetPt->clear();
-  fatjetEta->clear();
-  fatjetPhi->clear();
-  fatjetMass->clear();
-  tau1->clear();
-  tau2->clear();
-  tau3->clear();
-  tau4->clear();
+  npar = FatJetHdl->size();
+
   for(unsigned int i=0; i < FatJetHdl->size(); ++i)
   {
     reco::PFJet j = FatJetHdl->at(i);
     reco::PFJetRef jref(FatJetHdl, i);
     //tau1 = j.userFloat(NJettiLabel_+":tau1");
-    fatjetPt->push_back(j.pt());
-    fatjetEta->push_back(j.eta());
-    fatjetPhi->push_back(j.phi());
-    fatjetMass->push_back(j.mass());
-    tau1->push_back((*Tau1Hdl)[jref]);
-    tau2->push_back((*Tau2Hdl)[jref]);
-    tau3->push_back((*Tau3Hdl)[jref]);
-    tau4->push_back((*Tau4Hdl)[jref]);
+    pt[i] = j.pt();
+    eta[i] = j.eta();
+    phi[i] = j.phi();
+    mass[i] = j.mass();
+    tau1[i] = (*Tau1Hdl)[jref];
+    tau2[i] = (*Tau2Hdl)[jref];
+    tau3[i] = (*Tau3Hdl)[jref];
+    tau4[i] = (*Tau4Hdl)[jref];
   }
   tree_->Fill();
 }
