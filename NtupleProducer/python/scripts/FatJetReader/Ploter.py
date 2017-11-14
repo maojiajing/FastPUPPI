@@ -114,11 +114,12 @@ def UpdateColor(hists):
     for i in range(len(hists)):
         hists[i].SetLineColor(PyColors[i])
         hists[i].SetMarkerColor(PyColors[i])
-        if hists[i].GetNbinsX() <= 10:
+        if hists[i].GetNbinsX() < 10:
             hists[i].SetMarkerSize(2)
             hists[i].SetMarkerStyle(PyMarkers[i] if i <= len(PyMarkers) else i)
         else:
-            pass
+            hists[i].SetLineWidth(3)
+            hists[i].legendstyle = 'l'
             # hists[i].SetMarkerSize(1)
     return xtitle, ytitle
 
@@ -135,10 +136,22 @@ def PlotComp(plotdict, comname):
         v.SetTitle(k)
         hists.append(rootpy.asrootpy(v))
     xtitle, ytitle = UpdateColor(hists)
-    draw(hists, xtitle=xtitle, ytitle=ytitle, logy=False)
+    if "Rate" in comname:
+        draw(hists[:], xtitle=xtitle, ytitle=ytitle, ylimits=(1, 100000), logy=True)
+        line = ROOT.TLine(0, 42, 1000, 42)
+        line.SetLineWidth(2)
+        line.SetLineColor(2)
+        line.SetLineStyle(2)
+        line.Draw()
+        line = ROOT.TLine(0, 21, 1000, 21)
+        line.SetLineColor(1)
+        line.SetLineStyle(2)
+        line.Draw()
+    else:
+        draw(hists[:], xtitle=xtitle, ytitle=ytitle, logy=False, opt='HIST')
 
     ## Legend
-    legend = Legend(hists, leftmargin=0.45, margin=0.3)
+    legend = Legend(hists, leftmargin=0.55, margin=0.2)
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
     legend.SetTextFont(62)
@@ -152,8 +165,9 @@ def PlotComp(plotdict, comname):
     label.Draw()
     canvas.Modified()
     canvas.Update()
-    canvas.SaveAs("%s.png" % comname)
-    canvas.SaveAs("%s.root" % comname)
+    canvas.SaveAs("plots/%s.png" % comname)
+    canvas.SaveAs("plots/%s.pdf" % comname)
+    canvas.SaveAs("plots/%s.root" % comname)
     # wait()
 
 def GetProcesses(p):
@@ -167,12 +181,16 @@ def GetHistNames(p):
 
 if __name__ == "__main__":
     # p = pickle.load(open('./TTbar_PU140.p', 'rb'))
-    p = pickle.load(open('./TTbar_PU0.p', 'rb'))
+    p = pickle.load(open('./QCD_PU140.p', 'rb'))
+    # p = pickle.load(open('./MinBias_PU140.p', 'rb'))
+    # p = pickle.load(open('./TTbar_PU0.p', 'rb'))
     print(GetProcesses(p))
     print(GetType(p))
     print(GetHistNames(p))
     # selection = "*:*:Tau32Pt200"
     for h in GetHistNames(p):
+        # if "Rate" not in h:
+            # continue
         selection = "*:*:%s" % h
         retdict = {}
         plotdict = SliceDict(p, selection )

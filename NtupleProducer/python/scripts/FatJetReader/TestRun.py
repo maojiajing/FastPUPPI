@@ -54,24 +54,28 @@ def LoadTree():
                 genmap[k] = GenJetReader(t[g], v)
         treemap[k] = t
 
-
 if __name__ == "__main__":
-    folder = "/Users/benwu/Data/Dataset/L1PFInputs/FatJetNtuple/Oct02withGen_v1/"
+    folder = "/Users/benwu/Data/Dataset/L1PFInputs/FatJetNtuple/Nov10SeedJet_v4/"
     filename = {
-        "QCD_PU0"     : "%s/QCD_PU0*.root"       % folder,
+        # "QCD_PU0"     : "%s/QCD_PU0*.root"       % folder,
         "QCD_PU140"   : "%s/QCD_PU140*.root"     % folder,
-        "TTbar_PU140" : "%s/TTbar_PU140*.root"   % folder,
-        "TTbar_PU0"   : "%s/TTbar_PU0*.root"     % folder,
+        # "TTbar_PU140" : "%s/TTbar_PU140*.root"   % folder,
+        # "TTbar_PU0"   : "%s/TTbar_PU0*.root"     % folder,
+        # "MinBias_PU140" : "%s/MinBias_PU140_*.root"   % folder,
     }
 
     treename     = {
         'gen'        : 'GenJet',
-        'ak8TKVtx'   : 'myak8TKVtx',
-        'ak8TK'      : 'myak8TK',
-        'ak8Puppi'   : 'myak8Puppi',
-        'ak8PF'      : 'myak8PF',
-        'ak8Calo'    : 'myak8Calo',
-        'ak8RawCalo' : 'myak8RawCalo',
+        # 'ak8TKVtx'   : 'myak8TKVtx',
+        # 'ak8TK'      : 'myak8TK',
+        # 'ak8Puppi'   : 'myak8Puppi',
+        # 'ak8PF'      : 'myak8PF',
+        # 'ak8Calo'    : 'myak8Calo',
+        # 'ak8RawCalo' : 'myak8RawCalo',
+        'AK_PF4'      : 'myak4PF',
+        'SISCone_PF4'      : 'mysc4PF',
+        'Seed2_PF4'      : 'Seed2_PF',
+        'Seed3_PF4'      : 'Seed3_PF',
     }
 
     # Create a map of TTree
@@ -85,29 +89,41 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     processes = args.process
-
+    
     for process in processes:
         for i in xrange(treemap[process].values()[0].GetEntries()):
-            # if i > 30:
-                # break
+            if i % 500 == 0 :
+                print("Processed %d" % i)
+            if i > 20000 :
+                break
             ## No Accessing to Tchain friend in PyROOT :-(
             [ tr.GetEntry(i) for tr in  treemap[process].values() ]
-            genmap[process].Run()
-            genTops = genmap[process].GetGenJets([6])
-            genWs = genmap[process].GetGenJets([24])
-            genLeps = genmap[process].GetGenJets([11, 13, 15])
+
+            # genmap[process].Run()
+            # genTops = genmap[process].topjets
+            # genWs = genmap[process].Wjets
+            # genLeps = genmap[process].Lepjets
             for tr in ak8map[process].keys():
                 ak8map[process][tr].Run()
-                ak8map[process][tr].PlotTopMatchedJet(genTops, genLeps)
-                ak8map[process][tr].PlotWMatchedJet(genWs, genLeps)
+
+            akj1 = ak8map[process]['AK_PF4'].GetJet(1)
+            akj2 = ak8map[process]['AK_PF4'].GetJet(2)
+            akj3 = ak8map[process]['AK_PF4'].GetJet(3)
+            akj4 = ak8map[process]['AK_PF4'].GetJet(4)
+            for tr in ak8map[process].keys():
+                ak8map[process][tr].PlotRelation(1, akj1)
+                ak8map[process][tr].PlotRelation(2, akj2)
+                ak8map[process][tr].PlotRelation(3, akj3)
+                ak8map[process][tr].PlotRelation(4, akj4)
 
 
-
-                # ak8map[process][tr].Draw()
+                # ak8map[process][tr].PlotTopMatchedJet(genTops, genLeps)
+                # ak8map[process][tr].PlotWMatchedJet(genWs, genLeps)
 
     # Getting back the historgram
     histmap = defaultdict(dict)
     for process in processes:
+            histmap[process]["Gen"] = genmap[process].GetHist()
             for tr in  ak8map[process].keys():
                 histmap[process][tr] = ak8map[process][tr].GetHist()
 
