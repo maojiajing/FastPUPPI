@@ -15,4 +15,5 @@
 <use name="L1Trigger/Phase2L1ParticleFlow"/>
 <use name="MagneticField/Engine"/>
 <use name="MagneticField/Records"/>
+<use name="RecoJets/JetProducers"/>
 <flags EDM_PLUGIN="1"/>
