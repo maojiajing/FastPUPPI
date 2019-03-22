@@ -462,10 +462,19 @@ bool P2L1TPFJetProducer::Iterations( std::vector<TLorentzVector> &fjInputs_, std
     //float minval = Valcomb.begin()->first;
     if(Valcomb.empty()) break;
     std::pair<unsigned, unsigned > minpair = Valcomb.begin()->second;
+    //for(auto v : Valcomb)
+    //{
+        //std::cout << v.first <<" ";
+    //}
+    //std::cout << "--------"<< Valcomb.begin()->first << "  "<<fjInputs_.size() <<" "
+        //<<" first " << minpair.first <<"  "<< fjInputs_.at(minpair.first).Pt() <<"  "<< fjInputs_.at(minpair.first).Eta() <<"  "<< fjInputs_.at(minpair.first).Phi()
+        //<<" second " << minpair.second <<"  "<< fjInputs_.at(minpair.second).Pt() <<"  "<< fjInputs_.at(minpair.second).Eta() <<"  "<< fjInputs_.at(minpair.second).Phi()
+        //<< std::endl;
     if (minpair.first == minpair.second) // Jet is ready
     {
       TLorentzVector njet =fjInputs_.at(minpair.second);
       fjJets_.push_back(njet);
+      //std::cout << " newJet  "<< njet.Pt() <<" "<< njet.Eta() << " " << njet.Phi() << std::endl;
       fjInputs_.erase(fjInputs_.begin()+minpair.second);
     }
     else{
@@ -473,11 +482,13 @@ bool P2L1TPFJetProducer::Iterations( std::vector<TLorentzVector> &fjInputs_, std
       if (mergingE)
         newObj = MergingE(fjInputs_.at(minpair.first), fjInputs_.at(minpair.second));
       if (mergingWTA)
-      {
         newObj = MergingWTA(fjInputs_.at(minpair.first), fjInputs_.at(minpair.second));
-      }
-      fjInputs_.erase(fjInputs_.begin()+minpair.first);
-      fjInputs_.erase(fjInputs_.begin()+minpair.second);
+
+      //std::cout << " newObj  "<< newObj.Pt() <<" "<< newObj.Eta() << " " << newObj.Phi() << std::endl;
+      unsigned largeridx = minpair.first > minpair.second ? minpair.first : minpair.second;
+      unsigned smalleridx = minpair.first < minpair.second ? minpair.first : minpair.second;
+      fjInputs_.erase(fjInputs_.begin()+largeridx);
+      fjInputs_.erase(fjInputs_.begin()+smalleridx);
       fjInputs_.push_back(newObj);
     }
     if (fjInputs_.size() == 0) break;
@@ -520,9 +531,11 @@ inline TLorentzVector P2L1TPFJetProducer::MergingE(TLorentzVector &p1, TLorentzV
 // ===========================================================================
 inline TLorentzVector P2L1TPFJetProducer::MergingWTA(TLorentzVector &p1, TLorentzVector &p2) const
 {
-  TLorentzVector winner= p1.Pt() > p2.Pt() ? p1 : p2;
-  winner.SetPerp(p1.Pt() + p2.Pt());
-  return winner;
+    TLorentzVector winner= p1.Pt() > p2.Pt() ? p1 : p2;
+    TLorentzVector newTLV(0, 0, 0, 0);
+    //winner.SetPerp(p1.Pt() + p2.Pt()); //SetPerp changed jet axis
+    newTLV.SetPtEtaPhiM(p1.Pt() + p2.Pt(), winner.Eta(), winner.Phi(), winner.M());
+    return newTLV;
 }       // -----  end of function P2L1TPFJetProducer::MergingWTA  -----
 
 
