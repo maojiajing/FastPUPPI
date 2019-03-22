@@ -86,11 +86,15 @@ class P2L1TPFJetProducer : public edm::stream::EDProducer<> {
       inline float Metric_AK(TLorentzVector p1, TLorentzVector p2, bool sameobj) const;
       inline TLorentzVector MergingE(TLorentzVector &p1, TLorentzVector &p2) const;
       inline TLorentzVector MergingWTA(TLorentzVector &p1, TLorentzVector &p2) const;
-      bool Iterations();
-      bool GetCombinationsdR();
-      bool GetCombinationsKt();
+      bool Iterations( std::vector<TLorentzVector> &fjInputs_, std::vector<TLorentzVector> &fjJets_);
+      bool GetCombinationsKt( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb);
+      bool GetCombinationsdR( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb);
       void GetInput(edm::Event& iEvent, const edm::EventSetup& iSetup);
       void WriteJetCollection(const edm::EventSetup& iSetup);
+      bool RemergeJets();
+      void SplitN2Groups();
+      void SplitN2Groupsv2();
+      void SplitN2Tile(int Neta, int Nphi);
       //virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
       //virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
       //virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
@@ -101,12 +105,15 @@ class P2L1TPFJetProducer : public edm::stream::EDProducer<> {
       edm::Handle<l1t::PFCandidateCollection> ParHdl;
       std::unique_ptr<reco::PFJetCollection> jetCollection;
 
-      std::vector<TLorentzVector> fjInputs_;        // fastjet inputs
-      std::vector<TLorentzVector> fjJets_;          // fastjet jets
+      std::vector<TLorentzVector> fjInputs;        // fastjet inputs
+      std::vector<TLorentzVector> fjJets;          // fastjet jets
+
+      std::vector<std::vector<TLorentzVector> > gInputs;
+      std::vector<std::vector<TLorentzVector> > gJets;
 
 
-      std::map<std::pair<unsigned, unsigned>, float > combVal;
-      std::map<float, std::pair<unsigned, unsigned> > Valcomb;
+      //std::map<std::pair<unsigned, unsigned>, float > combVal;
+      //std::map<float, std::pair<unsigned, unsigned> > Valcomb;
 
 
       double rParam;
@@ -117,6 +124,8 @@ class P2L1TPFJetProducer : public edm::stream::EDProducer<> {
       bool metricdR;
       bool mergingE;
       bool mergingWTA;
+      bool N2Tile;
+      bool N2Group;
 
 };
 

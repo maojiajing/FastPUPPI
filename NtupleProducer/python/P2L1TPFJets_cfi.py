@@ -17,4 +17,6 @@ P2L1TJet  =  cms.EDProducer('P2L1TPFJetProducer',
                             metricdR = cms.bool(False),
                             mergingE = cms.bool(False),
                             mergingWTA = cms.bool(False),
+                            N2Tile = cms.bool(False),
+                            N2Group = cms.bool(False),
                           )

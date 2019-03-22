@@ -30,7 +30,9 @@ P2L1TPFJetProducer::P2L1TPFJetProducer(const edm::ParameterSet& iConfig):
   metricKt   ( iConfig.getParameter<bool>   ("metricKt")),
   metricdR   ( iConfig.getParameter<bool>   ("metricdR")),
   mergingE   ( iConfig.getParameter<bool>   ("mergingE")),
-  mergingWTA ( iConfig.getParameter<bool>   ("mergingWTA"))
+  mergingWTA ( iConfig.getParameter<bool>   ("mergingWTA")),
+  N2Tile ( iConfig.getParameter<bool>   ("N2Tile")),
+  N2Group ( iConfig.getParameter<bool>   ("N2Group"))
 {
   produces<reco::PFJetCollection>();
 }
@@ -53,20 +55,254 @@ P2L1TPFJetProducer::~P2L1TPFJetProducer()
 void
 P2L1TPFJetProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
+  jetCollection.reset();
+  fjInputs.clear();
+  fjJets.clear();
+  gInputs.clear();
+  gJets.clear();
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Getting the inputs ~~~~~
   iEvent.getByToken(ParTok_, ParHdl); 
   GetInput(iEvent, iSetup);
 
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Run clustering ~~~~~
-  Iterations();
+  if (N2Tile) SplitN2Tile(10, 10);
+  else if (N2Group) SplitN2Groups();
+  else
+  {
+    gInputs.push_back(fjInputs);
+    gJets.push_back(fjJets);
+  }
+  std::cout << " Run with N2Tile " << N2Tile <<" N2Group "<< N2Group <<" MetricKt " << metricKt <<" metricdR " 
+    << metricdR <<" mergingE " << mergingE <<" mergingWTA " << mergingWTA << " inputs " << ParHdl->size() << " Ngroups " << gInputs.size() << std::endl;
 
-  WriteJetCollection(iSetup);
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Run clustering ~~~~~
+  for (unsigned i = 0; i < gInputs.size(); ++i)
+  {
+    //std::cout << i<< "---------Initial size " << gInputs.at(i).size()<< std::endl;
+    //std::cout << gInputs.at(i).size()  << " " << gJets.at(i).size()<< std::endl;
+    Iterations(gInputs.at(i), gJets.at(i));
+  }
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Store the output ~~~~~
+  RemergeJets();
+  WriteJetCollection(iSetup);
   iEvent.put(std::move(jetCollection));
 }
 
+
+// ===  FUNCTION  ============================================================
+//         Name:  P2L1TPFJetProducer::SplitN2Tile
+//  Description:  /* cursor */
+// ===========================================================================
+void P2L1TPFJetProducer::SplitN2Tile(int Neta, int Nphi) 
+{
+
+  std::vector<float> etabounds, phibounds;
+  float deta = 10/Neta;
+  for (int i = 0; i < Neta; ++i)
+  {
+    etabounds.push_back(-5 + i*deta);
+  }
+
+  float dphi = 2*3.14/Neta;
+  for (int i = 0; i < Neta; ++i)
+  {
+    phibounds.push_back(-3.14 + i*dphi);
+  }
+
+  for (int i = 0; i < Neta*Nphi; ++i)
+  {
+    gJets.push_back(std::vector<TLorentzVector>());
+    gInputs.push_back(std::vector<TLorentzVector>());
+  }
+
+  for (unsigned i = 0; i < fjInputs.size(); i++)
+  {
+    int etaidx=0;
+    for (unsigned j = 0; j < etabounds.size()-1; ++j)
+    {
+      if(fjInputs.at(i).Eta() > etabounds[j]  && fjInputs.at(i).Eta() < etabounds[j+1]  )
+      {
+        etaidx = j;
+        break;
+      }
+    }
+
+    int phiidx=0;
+    for (unsigned k = 0; k < phibounds.size()-1; ++k)
+    {
+      if(fjInputs.at(i).Phi() > phibounds[k]  && fjInputs.at(i).Phi() < phibounds[k+1]  )
+      {
+        phiidx = k;
+        break;
+      }
+    }
+    gInputs[etaidx*Nphi + phiidx].push_back(fjInputs.at(i));
+  }
+
+
+}       // -----  end of function P2L1TPFJetProducer::SplitN2Tile  -----
+
+// ===  FUNCTION  ============================================================
+//         Name:  P2L1TPFJetProducer::SplitN2Groupsv2
+//  Description:  
+// ===========================================================================
+void P2L1TPFJetProducer::SplitN2Groupsv2()
+{
+  size_t intsize = fjInputs.size();
+  short neighours[intsize][intsize] = {{0}};
+
+  for (unsigned i = 0; i < fjInputs.size(); i++)
+  {
+    // keep i=j for grouping later on
+    for (unsigned j = i; j < fjInputs.size()-1; ++j)
+    {
+      double dEta = fabs( fjInputs[i].Eta() -  fjInputs[j].Eta());
+      double dPhi = TVector2::Phi_mpi_pi( fjInputs[i].Phi() -  fjInputs[j].Phi());
+      if (dEta < rParam && dPhi < rParam)
+        neighours[i][j]=1;
+    }
+  }
+
+
+  std::vector<std::set<int> > groupset;
+  std::set<int> linkedidx = {0};
+  std::vector<TLorentzVector> curgroup;
+
+  do
+  {
+    for (std::set<int>::const_iterator it = linkedidx.begin(); it != linkedidx.end(); ++it)
+    {
+      unsigned i = *it;
+      for (unsigned j = i; j < fjInputs.size(); ++j)
+      {
+        // Already read this row
+        if (i==j && neighours[i][j] == 0)
+          break;
+
+        if ( neighours[i][j] == 1) 
+        {
+          linkedidx.insert(j);
+          neighours[i][j] = 0;
+        }
+      }
+    }
+
+    groupset.push_back(linkedidx);
+    linkedidx.clear();
+    for (unsigned i = 0; i < fjInputs.size(); ++i)
+    {
+        if ( neighours[i][i] == 1) 
+        {
+          linkedidx.insert(i);
+          break;
+        }
+    }
+    if (linkedidx.empty()) break;
+  }
+  while (true);
+
+  for(auto idx : groupset)
+  {
+    std::vector<TLorentzVector> temp;
+    for(auto i : idx)
+    {
+      temp.push_back(fjInputs.at(i));
+    }
+    gInputs.push_back(temp);
+    gJets.push_back(std::vector<TLorentzVector>());
+  }
+
+
+}       // -----  end of function P2L1TPFJetProducer::SplitN2Groupsv2  -----
+
+
+// ===  FUNCTION  ============================================================
+//         Name:  P2L1TPFJetProducer::SplitN2Groups
+//  Description:  
+// ===========================================================================
+void P2L1TPFJetProducer::SplitN2Groups()
+{
+  size_t intsize = fjInputs.size();
+  short neighours[intsize][intsize] = {{0}};
+
+  for (unsigned i = 0; i < fjInputs.size(); i++)
+  {
+    // keep i=j for grouping later on
+    for (unsigned j = i; j < fjInputs.size()-1; ++j)
+    {
+      double dEta = fabs( fjInputs[i].Eta() -  fjInputs[j].Eta());
+      double dPhi = TVector2::Phi_mpi_pi( fjInputs[i].Phi() -  fjInputs[j].Phi());
+      if (dEta < rParam && dPhi < rParam)
+        neighours[i][j]=1;
+    }
+  }
+
+
+  std::vector<std::set<int> > groupset;
+  std::set<int> linkedidx = {0};
+  std::vector<TLorentzVector> curgroup;
+
+  do
+  {
+    for (std::set<int>::const_iterator it = linkedidx.begin(); it != linkedidx.end(); ++it)
+    {
+      unsigned i = *it;
+      for (unsigned j = i; j < fjInputs.size(); ++j)
+      {
+        // Already read this row
+        if (i==j && neighours[i][j] == 0)
+          break;
+
+        if ( neighours[i][j] == 1) 
+        {
+          linkedidx.insert(j);
+          neighours[i][j] = 0;
+        }
+      }
+    }
+
+    groupset.push_back(linkedidx);
+    linkedidx.clear();
+    for (unsigned i = 0; i < fjInputs.size(); ++i)
+    {
+        if ( neighours[i][i] == 1) 
+        {
+          linkedidx.insert(i);
+          break;
+        }
+    }
+    if (linkedidx.empty()) break;
+  }
+  while (true);
+
+  for(auto idx : groupset)
+  {
+    std::vector<TLorentzVector> temp;
+    for(auto i : idx)
+    {
+      temp.push_back(fjInputs.at(i));
+    }
+    gInputs.push_back(temp);
+    gJets.push_back(std::vector<TLorentzVector>());
+  }
+
+
+}       // -----  end of function P2L1TPFJetProducer::SplitN2Groups  -----
+
+
+// ===  FUNCTION  ============================================================
+//         Name:  P2L1TPFJetProducer::RemergeJets
+//  Description:  
+// ===========================================================================
+bool P2L1TPFJetProducer::RemergeJets()
+{
+  for(auto gj : gJets)
+  {
+    fjJets.insert(fjJets.end(), gj.begin(), gj.end());
+  }
+  return true;
+}       // -----  end of function P2L1TPFJetProducer::RemergeJets  -----
 
 // ===  FUNCTION  ============================================================
 //         Name:  P2L1TPFJetProducer::WriteJetCollection
@@ -76,7 +312,7 @@ void P2L1TPFJetProducer::WriteJetCollection(const edm::EventSetup& iSetup)
 {
   jetCollection = std::make_unique<reco::PFJetCollection>();
   std::vector<math::XYZTLorentzVector> p4_Jets;
-  for(auto g : fjJets_)
+  for(auto g : fjJets)
   {
     reco::PFJet jet;
     reco::Particle::Point           vertex_(0,0,0);
@@ -141,9 +377,11 @@ void P2L1TPFJetProducer::GetInput(edm::Event& iEvent, const edm::EventSetup& iSe
 {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Convert to local TLV ~~~~~
   for (size_t i = 0; i < ParHdl->size(); ++i) {
+    //if (ParHdl->at(i).pt() < 2)
+      //continue;
     TLorentzVector temp( ParHdl->at(i).px(), ParHdl->at(i).py(),
         ParHdl->at(i).pz(), ParHdl->at(i).energy() );
-    fjInputs_.push_back(temp);
+    fjInputs.push_back(temp);
   }
 
   //for (size_t i = 0; i < fjInputs_.size(); ++i)
@@ -157,7 +395,7 @@ void P2L1TPFJetProducer::GetInput(edm::Event& iEvent, const edm::EventSetup& iSe
 //         Name:  P2L1TPFJetProducer::GetCombinationsKt
 //  Description:  
 // ===========================================================================
-bool P2L1TPFJetProducer::GetCombinationsKt()
+bool P2L1TPFJetProducer::GetCombinationsKt( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb)
 {
   if(!metricKt) return false;
   
@@ -181,7 +419,7 @@ bool P2L1TPFJetProducer::GetCombinationsKt()
 //         Name:  P2L1TPFJetProducer::GetCombinationsdR
 //  Description:  
 // ===========================================================================
-bool P2L1TPFJetProducer::GetCombinationsdR()
+bool P2L1TPFJetProducer::GetCombinationsdR( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb)
 {
   if (!metricdR) return false;
 
@@ -209,16 +447,20 @@ bool P2L1TPFJetProducer::GetCombinationsdR()
 //         Name:  P2L1TPFJetProducer::Iterations
 //  Description:  
 // ===========================================================================
-bool P2L1TPFJetProducer::Iterations()
+bool P2L1TPFJetProducer::Iterations( std::vector<TLorentzVector> &fjInputs_, std::vector<TLorentzVector> &fjJets_)
 {
+  if(fjInputs_.empty())
+    return false;
+  std::map<float, std::pair<unsigned, unsigned> > Valcomb;
   while (true)
   {
     Valcomb.clear();
     if (metricKt)
-      GetCombinationsKt();
+      GetCombinationsKt(fjInputs_, Valcomb);
     if (metricdR)
-      GetCombinationsdR();
+      GetCombinationsdR(fjInputs_, Valcomb);
     //float minval = Valcomb.begin()->first;
+    if(Valcomb.empty()) break;
     std::pair<unsigned, unsigned > minpair = Valcomb.begin()->second;
     if (minpair.first == minpair.second) // Jet is ready
     {
@@ -231,7 +473,9 @@ bool P2L1TPFJetProducer::Iterations()
       if (mergingE)
         newObj = MergingE(fjInputs_.at(minpair.first), fjInputs_.at(minpair.second));
       if (mergingWTA)
+      {
         newObj = MergingWTA(fjInputs_.at(minpair.first), fjInputs_.at(minpair.second));
+      }
       fjInputs_.erase(fjInputs_.begin()+minpair.first);
       fjInputs_.erase(fjInputs_.begin()+minpair.second);
       fjInputs_.push_back(newObj);
