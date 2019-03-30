@@ -20,13 +20,12 @@ process.load('Configuration.StandardSequences.Services_cff')
 process.load("SimGeneral.HepPDTESSource.pythiapdt_cfi")
 process.load("FWCore.MessageLogger.MessageLogger_cfi")
 process.options   = cms.untracked.PSet( wantSummary = cms.untracked.bool(True), allowUnscheduled = cms.untracked.bool(False) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100))
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(options.maxEvents ))
 process.MessageLogger.cerr.FwkReport.reportEvery = 1
 
 process.source = cms.Source("PoolSource",
     # fileNames = cms.untracked.vstring('file:/eos/cms/store/cmst3/user/gpetrucc/l1tr/105X/NewInputs104X/010319/TTbar_PU200/inputs104X_TTbar_PU200_job1.root'),
-        ifiles,
-                            # fileNames = cms.untracked.vstring("file:./inputs104X_TTbar_PU200_job12.root"),
+    fileNames = cms.untracked.vstring( ifiles),
     # fileNames = cms.untracked.vstring("/store/user/lpctrig/benwu/Phase2L1/Gio_010319/TTbar_PU200/inputs104X_TTbar_PU200_job12.root"),
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     skipBadFiles = cms.untracked.bool(True),
@@ -102,17 +101,66 @@ def monitorPerf(label, tag, makeResp=True, makeRespSplit=True, makeJets=True, ma
         setattr(process.l1pfjetTable.jets, 'seed4'+label, cms.InputTag('seed4'+label))
 
         jtype = 'ktE4'
-        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True,  mergingE=True))
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True, mergingE=True, N2Group=False))
         setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'ktE4Group'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True, mergingE=True, N2Group=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'ktE4Tile'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True, mergingE=True, N2Tile=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+
+
         jtype = 'ktWTA4'
         _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True,  mergingWTA=True))
         setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'ktWTA4Resum'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True, mergingWTA=True, resumWTA=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'ktWTA4Group'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True, mergingWTA=True, N2Group=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'ktWTA4Tile'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricKt=True, mergingWTA=True, N2Tile=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+
         jtype = 'dRE4'
         _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True,  mergingE=True))
         setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRE4Group'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True, mergingE=True, N2Group=True ))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRE4Tile'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True, mergingE=True, N2Tile=True ))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+
         jtype = 'dRWTA4'
         _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True,  mergingWTA=True))
         setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRWTA4resum'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True, mergingWTA=True, resumWTA=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRWTA4Group'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True, mergingWTA=True, resumWTA=True, N2Group=True))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRWTA4GroupR6'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True,
+                                         mergingWTA=True, resumWTA=True,
+                                         N2Group=True, groupR=cms.double(0.6)))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRWTA4GroupR8'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True,
+                                         mergingWTA=True, resumWTA=True,
+                                         N2Group=True, groupR=cms.double(0.8)))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        jtype = 'dRWTA4GroupR10'
+        _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True,
+                                         mergingWTA=True, resumWTA=True,
+                                         N2Group=True, groupR=cms.double(1.0)))
+        setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
+        # jtype = 'dRWTA4Title'
+        # _add(jtype+label, P2L1TJet.clone(src = tag, metricdR=True, mergingWTA=True, N2Tile=True))
+        # setattr(process.l1pfjetTable.jets, jtype+label, cms.InputTag(jtype+label))
     if makeMET:
         _add('met'+label, pfMet.clone(src = tag, calculateSignificance = False))
         setattr(process.l1pfmetTable.mets, label, cms.InputTag('met'+label))
@@ -165,7 +213,7 @@ process.l1pfmetBarrelTable  = process.l1pfmetTable.clone(genMet = "genMetBarrelT
 # monitorPerf("L1Calo", "l1pfCandidates:Calo", makeRespSplit = False)
 # monitorPerf("L1TK", "l1pfCandidates:TK", makeRespSplit = False, makeJets=False, makeMET=False)
 # monitorPerf("L1TKV", "l1pfCandidates:TKVtx", makeRespSplit = False, makeJets=False, makeMET=False)
-monitorPerf("L1PF", "l1pfCandidates:PF")
+# monitorPerf("L1PF", "l1pfCandidates:PF")
 monitorPerf("L1Puppi", "l1pfCandidates:Puppi")
 
 process.runPF.associate(process.extraPFStuff)

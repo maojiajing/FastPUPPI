@@ -22,18 +22,21 @@
 // constructors and destructor
 //
 P2L1TPFJetProducer::P2L1TPFJetProducer(const edm::ParameterSet& iConfig):
-  ParTok_( consumes<l1t::PFCandidateCollection> (iConfig.getParameter<edm::InputTag>("src")) ),
-  rParam     ( iConfig.getParameter<double> ("rParam")),
-  jetPtMin   ( iConfig.getParameter<double> ("jetPtMin")),
-  inputEtMin ( iConfig.getParameter<double> ("inputEtMin")),
-  ktsign     ( iConfig.getParameter<int>    ("ktsign")),
-  metricKt   ( iConfig.getParameter<bool>   ("metricKt")),
-  metricdR   ( iConfig.getParameter<bool>   ("metricdR")),
-  mergingE   ( iConfig.getParameter<bool>   ("mergingE")),
-  mergingWTA ( iConfig.getParameter<bool>   ("mergingWTA")),
-  N2Tile ( iConfig.getParameter<bool>   ("N2Tile")),
-  N2Group ( iConfig.getParameter<bool>   ("N2Group"))
+  ParTok_    ( consumes<l1t::PFCandidateCollection> ( iConfig.getParameter<edm::InputTag> ( "src")) ),
+  rParam     ( iConfig.getParameter<double>         ( "rParam")),
+  groupR     ( iConfig.getParameter<double>         ( "groupR")),
+  jetPtMin   ( iConfig.getParameter<double>         ( "jetPtMin")),
+  inputEtMin ( iConfig.getParameter<double>         ( "inputEtMin")),
+  ktsign     ( iConfig.getParameter<int>            ( "ktsign")),
+  metricKt   ( iConfig.getParameter<bool>           ( "metricKt")),
+  metricdR   ( iConfig.getParameter<bool>           ( "metricdR")),
+  mergingE   ( iConfig.getParameter<bool>           ( "mergingE")),
+  mergingWTA ( iConfig.getParameter<bool>           ( "mergingWTA")),
+  resumWTA   ( iConfig.getParameter<bool>           ( "resumWTA")),
+  N2Tile     ( iConfig.getParameter<bool>           ( "N2Tile")),
+  N2Group    ( iConfig.getParameter<bool>           ( "N2Group"))
 {
+  debug=true;
   produces<reco::PFJetCollection>();
 }
 
@@ -65,14 +68,17 @@ P2L1TPFJetProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
   GetInput(iEvent, iSetup);
 
   if (N2Tile) SplitN2Tile(10, 10);
-  else if (N2Group) SplitN2Groups();
+  else if (N2Group) SplitN2Groupsv2();
   else
   {
     gInputs.push_back(fjInputs);
     gJets.push_back(fjJets);
   }
-  std::cout << " Run with N2Tile " << N2Tile <<" N2Group "<< N2Group <<" MetricKt " << metricKt <<" metricdR " 
-    << metricdR <<" mergingE " << mergingE <<" mergingWTA " << mergingWTA << " inputs " << ParHdl->size() << " Ngroups " << gInputs.size() << std::endl;
+
+  if (debug)
+    std::cout << " Run with N2Tile " << N2Tile <<" N2Group "<< N2Group <<" MetricKt " << metricKt <<" metricdR " 
+      << metricdR <<" mergingE " << mergingE <<" mergingWTA " << mergingWTA << " inputs " << ParHdl->size() << " Ngroups " << gInputs.size() 
+      << " groupdR "<< groupR<< std::endl;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Run clustering ~~~~~
   for (unsigned i = 0; i < gInputs.size(); ++i)
@@ -80,6 +86,7 @@ P2L1TPFJetProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
     //std::cout << i<< "---------Initial size " << gInputs.at(i).size()<< std::endl;
     //std::cout << gInputs.at(i).size()  << " " << gJets.at(i).size()<< std::endl;
     Iterations(gInputs.at(i), gJets.at(i));
+    //std::cout<<"Run to \033[0;31m"<<__func__<<"\033[0m at \033[1;36m"<< __FILE__<<"\033[0m, line \033[0;34m"<< __LINE__<<"\033[0m"<< std::endl; 
   }
 
 
@@ -87,6 +94,16 @@ P2L1TPFJetProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
   RemergeJets();
   WriteJetCollection(iSetup);
   iEvent.put(std::move(jetCollection));
+
+  //std::vector<unsigned> grpsizes;
+  //for(auto i : gInputs)
+  //{
+    //grpsizes.push_back(i.size());
+  //}
+  //auto outg = std::make_unique<nanoaod::FlatTable>(grpsizes.size(), "GroupsInfo", true); 
+  //outg->addColumn<unsigned>("GroupSize", grpsizes,  "pt of matched gen jet", nanoaod::FlatTable::UInt8Column);
+  //outg->addColumnValue<unsigned>("InputSize",  fjInputs.size(), "genMet pt", nanoaod::FlatTable::UInt8Column);
+  //iEvent.put(std::move(outg), "GroupsInfo");
 }
 
 
@@ -145,74 +162,104 @@ void P2L1TPFJetProducer::SplitN2Tile(int Neta, int Nphi)
 
 // ===  FUNCTION  ============================================================
 //         Name:  P2L1TPFJetProducer::SplitN2Groupsv2
-//  Description:  
+//  Description:  2nd version, using arrays as in FPGA
 // ===========================================================================
 void P2L1TPFJetProducer::SplitN2Groupsv2()
 {
-  size_t intsize = fjInputs.size();
-  short neighours[intsize][intsize] = {{0}};
+#define MAXSIZE 300
+  const size_t intsize = fjInputs.size();
+  const size_t grpsize = intsize;
+  if (intsize > MAXSIZE)
+    std::cout << " WARNING: Input array is too big for  MAXSIZE " << MAXSIZE   << std::endl;
+  std::bitset<MAXSIZE> neighours[intsize] = {0};
+  std::bitset<MAXSIZE> groups[grpsize] = {0};
+  grpInputMap.clear();
 
-  for (unsigned i = 0; i < fjInputs.size(); i++)
+
+  for (unsigned i = 0; i < intsize; i++)
   {
-    // keep i=j for grouping later on
-    for (unsigned j = i; j < fjInputs.size()-1; ++j)
+    neighours[i] = 0;
+    for (unsigned j = 0; j < intsize; ++j)
     {
-      double dEta = fabs( fjInputs[i].Eta() -  fjInputs[j].Eta());
-      double dPhi = TVector2::Phi_mpi_pi( fjInputs[i].Phi() -  fjInputs[j].Phi());
-      if (dEta < rParam && dPhi < rParam)
-        neighours[i][j]=1;
-    }
-  }
-
-
-  std::vector<std::set<int> > groupset;
-  std::set<int> linkedidx = {0};
-  std::vector<TLorentzVector> curgroup;
-
-  do
-  {
-    for (std::set<int>::const_iterator it = linkedidx.begin(); it != linkedidx.end(); ++it)
-    {
-      unsigned i = *it;
-      for (unsigned j = i; j < fjInputs.size(); ++j)
+      //if (fjInputs[i].DeltaR(fjInputs[j]) < rParam*2)
+      if (fjInputs[i].DeltaR(fjInputs[j]) <= groupR)
       {
-        // Already read this row
-        if (i==j && neighours[i][j] == 0)
-          break;
-
-        if ( neighours[i][j] == 1) 
-        {
-          linkedidx.insert(j);
-          neighours[i][j] = 0;
-        }
+        neighours[i].set(j);
       }
     }
-
-    groupset.push_back(linkedidx);
-    linkedidx.clear();
-    for (unsigned i = 0; i < fjInputs.size(); ++i)
-    {
-        if ( neighours[i][i] == 1) 
-        {
-          linkedidx.insert(i);
-          break;
-        }
-    }
-    if (linkedidx.empty()) break;
   }
-  while (true);
 
-  for(auto idx : groupset)
+  for (unsigned i = 0; i < intsize; i++)
   {
-    std::vector<TLorentzVector> temp;
-    for(auto i : idx)
+    //std::cout << "input "  << i <<"  bit " << neighours[i]<< std::endl;
+    //if (neighours[i].none())
+      //std::cout << " Empty ? " << i <<"  pt " << fjInputs.at(i).Pt() <<" eta "<< fjInputs.at(i).Eta() <<"  phi "<< fjInputs.at(i).Phi()<< std::endl;
+    for (unsigned j = 0; j < grpsize; ++j)
     {
-      temp.push_back(fjInputs.at(i));
+      if ((groups[j] & neighours[i]).any())
+      {
+        groups[j] |= neighours[i];
+        break;
+      }
+      if(groups[j].none())
+      {
+        groups[j] = neighours[i];
+        break;
+      }
+      // Run out of groups
+      if (j == intsize)
+        groups[j] |= neighours[i] ;
+    }
+  }
+
+  for (unsigned i = 0; i < grpsize; i++)
+  {
+    //std::cout << " org group " << i << " " << groups[i]<< std::endl;
+    for (unsigned j = i+1; j < grpsize; ++j)
+    {
+      if ((groups[j] & groups[i]).any())
+      {
+        groups[i] |= groups[j];
+        groups[j].reset();
+      }
+    }
+  }
+
+  for (unsigned i = 0; i < grpsize; ++i)
+  {
+    grpInputMap[i]= std::vector<unsigned>();
+    if (groups[i] == 0) continue;
+    //std::cout << " final group " << i << " " << groups[i] << std::endl;
+    std::vector<TLorentzVector> temp;
+    for (unsigned j = 0; j < intsize; ++j)
+    {
+      if (groups[i].test(j))
+      {
+        //std::cout << i  << ", " << j <<", " << fjInputs.at(j).Pt() <<", " << fjInputs.at(j).Eta() <<", " << fjInputs.at(j).Phi() << std::endl;
+        //std::cout << " Group " << i  << " input " << j <<" pt " << fjInputs.at(j).Pt() <<"  eta " << fjInputs.at(j).Eta() <<" Phi " << fjInputs.at(j).Phi() << std::endl;
+        temp.push_back(fjInputs.at(j));
+        grpInputMap[i].push_back(j);
+      }
     }
     gInputs.push_back(temp);
     gJets.push_back(std::vector<TLorentzVector>());
   }
 
+  unsigned total=0;
+  for (unsigned i = 0; i < gInputs.size(); ++i)
+  {
+    //std::cout << "Group " <<i << " size " << gInputs.at(i).size()  << " index " ;
+    //for(auto j : grpInputMap[i])
+    //{
+      //std::cout << j <<" ";
+    //}
+
+    //std::cout << " " << std::endl;
+    total += gInputs.at(i).size() ;
+  }
+
+  if (total != intsize)
+    std::cout << "Totoal size " << total <<" org input " << intsize << std::endl;
 
 }       // -----  end of function P2L1TPFJetProducer::SplitN2Groupsv2  -----
 
@@ -229,7 +276,7 @@ void P2L1TPFJetProducer::SplitN2Groups()
   for (unsigned i = 0; i < fjInputs.size(); i++)
   {
     // keep i=j for grouping later on
-    for (unsigned j = i; j < fjInputs.size()-1; ++j)
+    for (unsigned j = i; j < fjInputs.size(); ++j)
     {
       double dEta = fabs( fjInputs[i].Eta() -  fjInputs[j].Eta());
       double dPhi = TVector2::Phi_mpi_pi( fjInputs[i].Phi() -  fjInputs[j].Phi());
@@ -384,30 +431,27 @@ void P2L1TPFJetProducer::GetInput(edm::Event& iEvent, const edm::EventSetup& iSe
     fjInputs.push_back(temp);
   }
 
-  //for (size_t i = 0; i < fjInputs_.size(); ++i)
-  //{
-    //std::cout << i <<  " pt " << fjInputs_.at(i).Pt() << std::endl;
-  //}
-
 }       // -----  end of function P2L1TPFJetProducer::GetInput  -----
 
 // ===  FUNCTION  ============================================================
 //         Name:  P2L1TPFJetProducer::GetCombinationsKt
 //  Description:  
 // ===========================================================================
-bool P2L1TPFJetProducer::GetCombinationsKt( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb)
+bool P2L1TPFJetProducer::GetCombinationsKt( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb, 
+    std::vector<bool> &idx)
 {
   if(!metricKt) return false;
   
-  for (unsigned i = 0; i < fjInputs_.size(); ++i)
+  for (unsigned i = 0; i < idx.size(); ++i)
   {
-      for (unsigned j = i; j < fjInputs_.size(); ++j)
+    if(!idx[i]) continue;
+      for (unsigned j = i; j < idx.size(); ++j)
       {
+        if(!idx[j]) continue;
         float val= -999;
         if (fjInputs_.at(i).DeltaR(fjInputs_.at(j)) > rParam) continue;
         val = Metric_AK(fjInputs_.at(i), fjInputs_.at(j), i==j);
 
-        //combVal[std::make_pair(i, j)]= val;
         Valcomb[val] = std::make_pair(i, j);
       }
   }
@@ -419,24 +463,30 @@ bool P2L1TPFJetProducer::GetCombinationsKt( std::vector<TLorentzVector> &fjInput
 //         Name:  P2L1TPFJetProducer::GetCombinationsdR
 //  Description:  
 // ===========================================================================
-bool P2L1TPFJetProducer::GetCombinationsdR( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb)
+bool P2L1TPFJetProducer::GetCombinationsdR( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb,
+    std::vector<bool> &idx)
 {
   if (!metricdR) return false;
 
-  std::vector<float> pts;
-  for(auto i : fjInputs_)
+  std::map<float, unsigned> ptmap;
+  for (unsigned i = 0; i < idx.size(); ++i)
   {
-    pts.push_back(i.Pt());
+    if(idx[i])
+      ptmap[fjInputs_[i].Pt()] = i;
   }
 
-  unsigned maxptidx= std::distance(pts.begin(), std::max_element(pts.begin(), pts.end()));
-  
-  for (size_t i = 0; i < fjInputs_.size(); ++i)
+  if (ptmap.empty()) return false;
+  unsigned maxptidx= ptmap.rbegin()->second;
+
+  //std::cout << " Maxptindx "<< maxptidx <<" max pt " << fjInputs_.at(maxptidx).Pt() << std::endl;
+  for (size_t i = 0; i < idx.size(); ++i)
   {
+    if (!idx[i]) continue;
     float val= -999;
     if (fjInputs_.at(i).DeltaR(fjInputs_.at(maxptidx)) > rParam) continue;
     val = Metric_dR(fjInputs_.at(i), fjInputs_.at(maxptidx), i==maxptidx);
     Valcomb[val] = std::make_pair(i, maxptidx);
+    //std::cout << " valcomb " << val <<" pair " <<i <<" " << maxptidx << std::endl;
   };
 
   return true;
@@ -452,14 +502,18 @@ bool P2L1TPFJetProducer::Iterations( std::vector<TLorentzVector> &fjInputs_, std
   if(fjInputs_.empty())
     return false;
   std::map<float, std::pair<unsigned, unsigned> > Valcomb;
+  std::vector<bool> idx(fjInputs_.size(), true);
+  std::map<unsigned, std::pair<unsigned, unsigned> > history;
+  std::vector<unsigned> jetidx;
+  const unsigned orgsize = fjInputs_.size();
+
   while (true)
   {
     Valcomb.clear();
     if (metricKt)
-      GetCombinationsKt(fjInputs_, Valcomb);
+      GetCombinationsKt(fjInputs_, Valcomb, idx);
     if (metricdR)
-      GetCombinationsdR(fjInputs_, Valcomb);
-    //float minval = Valcomb.begin()->first;
+      GetCombinationsdR(fjInputs_, Valcomb, idx);
     if(Valcomb.empty()) break;
     std::pair<unsigned, unsigned > minpair = Valcomb.begin()->second;
     //for(auto v : Valcomb)
@@ -474,8 +528,10 @@ bool P2L1TPFJetProducer::Iterations( std::vector<TLorentzVector> &fjInputs_, std
     {
       TLorentzVector njet =fjInputs_.at(minpair.second);
       fjJets_.push_back(njet);
-      //std::cout << " newJet  "<< njet.Pt() <<" "<< njet.Eta() << " " << njet.Phi() << std::endl;
-      fjInputs_.erase(fjInputs_.begin()+minpair.second);
+      jetidx.push_back(minpair.second);
+      idx[minpair.second] = false;
+      //std::cout << " newJet  "<< njet.Pt() <<" "<< njet.Eta() << " " << njet.Phi() << " pair index " << minpair.first <<" " << minpair.second<< std::endl;
+      history[10000+minpair.first] = std::make_pair(minpair.first, minpair.second);
     }
     else{
       TLorentzVector newObj;
@@ -485,17 +541,85 @@ bool P2L1TPFJetProducer::Iterations( std::vector<TLorentzVector> &fjInputs_, std
         newObj = MergingWTA(fjInputs_.at(minpair.first), fjInputs_.at(minpair.second));
 
       //std::cout << " newObj  "<< newObj.Pt() <<" "<< newObj.Eta() << " " << newObj.Phi() << std::endl;
-      unsigned largeridx = minpair.first > minpair.second ? minpair.first : minpair.second;
-      unsigned smalleridx = minpair.first < minpair.second ? minpair.first : minpair.second;
-      fjInputs_.erase(fjInputs_.begin()+largeridx);
-      fjInputs_.erase(fjInputs_.begin()+smalleridx);
       fjInputs_.push_back(newObj);
-    }
-    if (fjInputs_.size() == 0) break;
+      idx.push_back(true);
+      idx[minpair.first] = false;
+      idx[minpair.second] = false;
+      //std::cout << " new idx size " << idx.size()-1 << " last " << idx.back() <<" dau" << minpair.first <<" " << minpair.second << std::endl;
+      history[idx.size()-1] = std::make_pair(minpair.first, minpair.second);
+     }
   }
+
+  if (mergingWTA && resumWTA)
+      ResumWTA(fjInputs_, fjJets_, orgsize, jetidx, history);
   
   return true;
 }       // -----  end of function P2L1TPFJetProducer::Iterations  -----
+
+
+// ===  FUNCTION  ============================================================
+//         Name:  P2L1TPFJetProducer::SearchHistory
+//  Description:  /* cursor */
+// ===========================================================================
+std::vector<unsigned> P2L1TPFJetProducer::SearchHistory(const unsigned &orgsize, const unsigned searchidx, std::map<unsigned, std::pair<unsigned, unsigned> > &history) const
+{
+  std::vector<unsigned> returnidx;
+
+  std::pair<unsigned, unsigned> daughter(99999, 99999);
+  if (history.find(searchidx) != history.end())
+    daughter = history[searchidx];
+
+  //std::cout << searchidx <<"  " << orgsize <<" in history " << (history.find(searchidx) != history.end()) <<"  " << daughter.first <<" " << daughter.second << std::endl;
+  if(daughter.first < orgsize) 
+  {
+    returnidx.push_back(daughter.first);
+  }
+  else if (daughter.first != 99999)
+  {
+    std::vector<unsigned> tempfirst = SearchHistory(orgsize, daughter.first, history);
+    returnidx.insert(returnidx.end(), tempfirst.begin(), tempfirst.end());
+  }
+
+  if (daughter.first== daughter.second) return returnidx;
+
+  if(daughter.second < orgsize) 
+    returnidx.push_back(daughter.second);
+  else if (daughter.second != 99999)
+  {
+    std::vector<unsigned> tempsecond = SearchHistory(orgsize, daughter.second, history);
+    returnidx.insert(returnidx.end(), tempsecond.begin(), tempsecond.end());
+  }
+
+  return returnidx;
+}       // -----  end of function P2L1TPFJetProducer::SearchHistory  -----
+
+// ===  FUNCTION  ============================================================
+//         Name:  P2L1TPFJetProducer::ResumWTA
+//  Description:  
+// ===========================================================================
+void P2L1TPFJetProducer::ResumWTA( std::vector<TLorentzVector> &fjInputs_, std::vector<TLorentzVector> &fjJets_, 
+  const unsigned &orgsize, std::vector<unsigned> &jetidx, std::map<unsigned, std::pair<unsigned, unsigned> > &history) const
+{
+
+  for (unsigned i = 0; i < jetidx.size(); ++i)
+  {
+    TLorentzVector orgjet = fjJets_.at(i);
+    std::vector<unsigned> considx= SearchHistory(orgsize, 10000+jetidx[i], history);
+    TLorentzVector newjet(0, 0, 0, 0);
+    //std::cout << " orgpt " << orgjet.Pt() <<" eta " << orgjet.Eta() <<" phi " << orgjet.Phi() <<" mass " << orgjet.M() << " from ";
+    for(auto j : considx)
+    {
+      //std::cout << " " << j;
+
+      //std::cout << "jets "<< i  << ", " << j <<", " << fjInputs_.at(j).Pt() <<", " << fjInputs_.at(j).Eta() <<", " << fjInputs_.at(j).Phi() << std::endl;
+      newjet += fjInputs_[j];
+    }
+    //std::cout << " end of input " << std::endl;
+    //std::cout << " orgpt " << orgjet.Pt() <<" eta " << orgjet.Eta() <<" phi " << orgjet.Phi() <<" mass " << orgjet.M()
+      //<< " newpt " << newjet.Pt() <<" eta " << newjet.Eta() <<" phi " << newjet.Phi() <<" mass " << newjet.M() << std::endl;
+    fjJets_.at(i) = newjet;
+  }
+}       // -----  end of function P2L1TPFJetProducer::ResumWTA  -----
 
 // ===  FUNCTION  ============================================================
 //         Name:  P2L1TPFJetProducer::Metric_AK
@@ -535,6 +659,7 @@ inline TLorentzVector P2L1TPFJetProducer::MergingWTA(TLorentzVector &p1, TLorent
     TLorentzVector newTLV(0, 0, 0, 0);
     //winner.SetPerp(p1.Pt() + p2.Pt()); //SetPerp changed jet axis
     newTLV.SetPtEtaPhiM(p1.Pt() + p2.Pt(), winner.Eta(), winner.Phi(), winner.M());
+    //std::cout << " p1 " << p1.Pt() <<" p2 " << p2.Pt() <<" newPt " << newTLV.Pt() << std::endl;
     return newTLV;
 }       // -----  end of function P2L1TPFJetProducer::MergingWTA  -----
 

@@ -45,6 +45,7 @@
 #include "DataFormats/JetReco/interface/PFJetCollection.h"
 #include "RecoJets/JetProducers/interface/JetSpecific.h"
 
+#include "DataFormats/NanoAOD/interface/FlatTable.h"
 #include "TLorentzVector.h"
 //
 // class declaration
@@ -87,14 +88,17 @@ class P2L1TPFJetProducer : public edm::stream::EDProducer<> {
       inline TLorentzVector MergingE(TLorentzVector &p1, TLorentzVector &p2) const;
       inline TLorentzVector MergingWTA(TLorentzVector &p1, TLorentzVector &p2) const;
       bool Iterations( std::vector<TLorentzVector> &fjInputs_, std::vector<TLorentzVector> &fjJets_);
-      bool GetCombinationsKt( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb);
-      bool GetCombinationsdR( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb);
+      bool GetCombinationsKt( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb, std::vector<bool> &idx);
+      bool GetCombinationsdR( std::vector<TLorentzVector> &fjInputs_, std::map<float, std::pair<unsigned, unsigned> > &Valcomb, std::vector<bool> &idx);
       void GetInput(edm::Event& iEvent, const edm::EventSetup& iSetup);
       void WriteJetCollection(const edm::EventSetup& iSetup);
       bool RemergeJets();
       void SplitN2Groups();
       void SplitN2Groupsv2();
       void SplitN2Tile(int Neta, int Nphi);
+      void ResumWTA( std::vector<TLorentzVector> &fjInputs_, std::vector<TLorentzVector> &fjJets_, 
+          const unsigned &orgsize, std::vector<unsigned> &jetidx, std::map<unsigned, std::pair<unsigned, unsigned> > &history) const;
+      std::vector<unsigned> SearchHistory(const unsigned &orgsize, const unsigned searchidx, std::map<unsigned, std::pair<unsigned, unsigned> > &history) const;
       //virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
       //virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
       //virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
@@ -111,12 +115,15 @@ class P2L1TPFJetProducer : public edm::stream::EDProducer<> {
       std::vector<std::vector<TLorentzVector> > gInputs;
       std::vector<std::vector<TLorentzVector> > gJets;
 
+      std::map<unsigned, std::vector<unsigned> > grpInputMap;
 
       //std::map<std::pair<unsigned, unsigned>, float > combVal;
       //std::map<float, std::pair<unsigned, unsigned> > Valcomb;
 
+      bool debug;
 
       double rParam;
+      double groupR;
       double jetPtMin;
       double inputEtMin;
       int ktsign;
@@ -124,6 +131,7 @@ class P2L1TPFJetProducer : public edm::stream::EDProducer<> {
       bool metricdR;
       bool mergingE;
       bool mergingWTA;
+      bool resumWTA;
       bool N2Tile;
       bool N2Group;
 
