@@ -95,6 +95,14 @@ P2L1TPFJetProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
   WriteJetCollection(iSetup);
   iEvent.put(std::move(jetCollection));
 
+  //std::cout << "Total number of jets " << fjJets.size() <<"  : ";
+  //for(auto i : fjJets)
+  //{
+    
+    //std::cout << i.Pt() <<" ";
+  //}
+  //std::cout << " " << std::endl;
+
   //std::vector<unsigned> grpsizes;
   //for(auto i : gInputs)
   //{
@@ -344,9 +352,18 @@ void P2L1TPFJetProducer::SplitN2Groups()
 // ===========================================================================
 bool P2L1TPFJetProducer::RemergeJets()
 {
+  std::map<double, TLorentzVector> sortjets;
   for(auto gj : gJets)
   {
-    fjJets.insert(fjJets.end(), gj.begin(), gj.end());
+    for(auto j : gj)
+    {
+      sortjets[j.Pt()] = j;
+    }
+  }
+  for(std::map<double, TLorentzVector>::reverse_iterator it=sortjets.rbegin();
+    it!=sortjets.rend(); ++it)
+  {
+    fjJets.push_back(it->second);
   }
   return true;
 }       // -----  end of function P2L1TPFJetProducer::RemergeJets  -----
